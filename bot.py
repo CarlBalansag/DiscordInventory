@@ -87,31 +87,31 @@ class SetupModal(discord.ui.Modal, title='Setup Google Sheets'):
             )
 
             await interaction.followup.send(
-                f"�o. Successfully connected to your Google Sheet!\n"
-                f"dY"S Spreadsheet ID: `{spreadsheet_id}`\n"
-                f"dY", Sheet Name: `{self.sheet_name.value}`\n\n"
-                f"You can now use `/add` to add products to your inventory!",
+                f"Successfully connected to your Google Sheet!\n"
+                f"Spreadsheet ID: `{spreadsheet_id}`\n"
+                f"Sheet Name: `{self.sheet_name.value}`\n\n"
+                "You can now use `/add` to add products to your inventory!",
                 ephemeral=True
             )
 
         except ValueError as e:
             await interaction.followup.send(
-                f"�?O Invalid spreadsheet URL/ID: {str(e)}",
+                f"Invalid spreadsheet URL/ID: {str(e)}",
                 ephemeral=True
             )
         except Exception as e:
             error_message = str(e)
             if "not found" in error_message or "404" in error_message:
                 await interaction.followup.send(
-                    f"�?O Could not access the spreadsheet.\n\n"
-                    f"**Please make sure you've shared the spreadsheet with:**\n"
+                    "Could not access the spreadsheet.\n\n"
+                    "**Please make sure you've shared the spreadsheet with:**\n"
                     f"`{sheets_manager.credentials.service_account_email}`\n\n"
-                    f"Give it 'Editor' permissions.",
+                    "Give it 'Editor' permissions.",
                     ephemeral=True
                 )
             else:
                 await interaction.followup.send(
-                    f"�?O Error: {error_message}",
+                    f"Error: {error_message}",
                     ephemeral=True
                 )
 
@@ -132,7 +132,7 @@ async def add(interaction: discord.Interaction):
     user = await db.get_user(str(interaction.user.id))
     if not user:
         await interaction.response.send_message(
-            "�?O You haven't set up your Google Sheets yet! Use `/setup` first.",
+            "You haven't set up your Google Sheets yet! Use `/setup` first.",
             ephemeral=True
         )
         return
@@ -274,7 +274,7 @@ async def inventory(interaction: discord.Interaction):
         if not user:
             print(f"DEBUG: User not found in database")
             await interaction.followup.send(
-                "�?O You haven't set up your Google Sheets yet! Use `/setup` first.",
+                "You haven't set up your Google Sheets yet! Use `/setup` first.",
                 ephemeral=True
             )
             return
@@ -311,7 +311,7 @@ async def inventory(interaction: discord.Interaction):
 
     except Exception as e:
         await interaction.followup.send(
-            f"�?O Error reading inventory: {str(e)}",
+            f"Error reading inventory: {str(e)}",
             ephemeral=True
         )
 
