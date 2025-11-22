@@ -1,7 +1,11 @@
 """
 Discord Reselling Bot - Main Bot File
 """
+import asyncio
+import os
+
 import discord
+from aiohttp import web
 from discord import app_commands
 from discord.ext import commands
 import config
@@ -362,22 +366,42 @@ async def clear(interaction: discord.Interaction):
             ephemeral=True
         )
 
+# ===== HEALTHCHECK HTTP SERVER (for Render free tier) =====
+
+async def health(request):
+    """Simple health endpoint for platform port checks."""
+    return web.Response(text="ok")
+
+async def run_http_server():
+    """Run a minimal HTTP server so Render can detect a bound port."""
+    app = web.Application()
+    app.router.add_get("/", health)
+    port = int(os.getenv("PORT", 10000))
+    runner = web.AppRunner(app)
+    await runner.setup()
+    site = web.TCPSite(runner, "0.0.0.0", port)
+    await site.start()
+
 # ===== RUN BOT =====
 
-def main():
-    """Main function to run the bot"""
+async def main_async():
+    """Main entrypoint: validate config, init DB, start bot and HTTP server."""
+    # Validate configuration (also checks service account file)
+    config.validate_config()
+
+    # Initialize database schema
+    await db.initialize()
+
+    # Run Discord bot and HTTP health server concurrently
+    bot_task = asyncio.create_task(bot.start(config.DISCORD_TOKEN))
+    http_task = asyncio.create_task(run_http_server())
+
+    await asyncio.gather(bot_task, http_task)
+
+if __name__ == "__main__":
     try:
-        # Validate configuration
-        config.validate_config()
-        print("Configuration validated successfully")
-
-        # Run the bot
-        bot.run(config.DISCORD_TOKEN)
-
+        asyncio.run(main_async())
     except ValueError as e:
         print(f"Configuration Error: {e}")
     except Exception as e:
         print(f"Error running bot: {e}")
-
-if __name__ == "__main__":
-    main()
