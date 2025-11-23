@@ -370,17 +370,22 @@ async def clear(interaction: discord.Interaction):
 
 async def health(request):
     """Simple health endpoint for platform port checks."""
-    return web.Response(text="ok")
+    from datetime import datetime
+    timestamp = datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S UTC')
+    print(f"Health check pinged at {timestamp}")
+    return web.Response(text=f"ok - {timestamp}")
 
 async def run_http_server():
     """Run a minimal HTTP server so Render can detect a bound port."""
     app = web.Application()
     app.router.add_get("/", health)
     port = int(os.getenv("PORT", 10000))
+    print(f"Starting HTTP server on port {port}...")
     runner = web.AppRunner(app)
     await runner.setup()
     site = web.TCPSite(runner, "0.0.0.0", port)
     await site.start()
+    print(f"HTTP server running on http://0.0.0.0:{port}")
 
 # ===== RUN BOT =====
 
