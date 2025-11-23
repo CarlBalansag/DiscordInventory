@@ -13,6 +13,10 @@ from database import Database
 from google_sheets import GoogleSheetsManager
 from commands.add import AddProductStep1Modal
 from commands.sales import ProductSelectView
+from commands.edit import InventorySelectView
+from commands.remove import RemoveInventorySelectView
+from commands.edit_sales import SaleSelectView
+from commands.remove_sales import RemoveSaleSelectView
 
 # Initialize bot with intents
 intents = discord.Intents.default()
@@ -316,6 +320,190 @@ async def inventory(interaction: discord.Interaction):
     except Exception as e:
         await interaction.followup.send(
             f"Error reading inventory: {str(e)}",
+            ephemeral=True
+        )
+
+# ===== /EDIT COMMAND =====
+
+@bot.tree.command(name="edit", description="Edit an inventory item")
+@is_dm_only()
+async def edit(interaction: discord.Interaction):
+    """Edit inventory item command"""
+    await interaction.response.defer(ephemeral=True)
+
+    try:
+        # Check if user is registered
+        user = await db.get_user(str(interaction.user.id))
+        if not user:
+            await interaction.followup.send(
+                "You haven't set up your Google Sheets yet! Use `/setup` first.",
+                ephemeral=True
+            )
+            return
+
+        # Read inventory from Google Sheets
+        items = sheets_manager.read_inventory(
+            user['spreadsheet_id'],
+            user['sheet_name'],
+            start_row=8
+        )
+
+        if not items:
+            await interaction.followup.send(
+                "Your inventory is empty! Use `/add` to add products first.",
+                ephemeral=True
+            )
+            return
+
+        # Show product selection dropdown
+        view = InventorySelectView(items)
+        await interaction.followup.send(
+            "Select the product you want to edit:",
+            view=view,
+            ephemeral=True
+        )
+
+    except Exception as e:
+        await interaction.followup.send(
+            f"Error loading products: {str(e)}",
+            ephemeral=True
+        )
+
+# ===== /REMOVE COMMAND =====
+
+@bot.tree.command(name="remove", description="Remove an inventory item")
+@is_dm_only()
+async def remove(interaction: discord.Interaction):
+    """Remove inventory item command"""
+    await interaction.response.defer(ephemeral=True)
+
+    try:
+        # Check if user is registered
+        user = await db.get_user(str(interaction.user.id))
+        if not user:
+            await interaction.followup.send(
+                "You haven't set up your Google Sheets yet! Use `/setup` first.",
+                ephemeral=True
+            )
+            return
+
+        # Read inventory from Google Sheets
+        items = sheets_manager.read_inventory(
+            user['spreadsheet_id'],
+            user['sheet_name'],
+            start_row=8
+        )
+
+        if not items:
+            await interaction.followup.send(
+                "Your inventory is empty! Nothing to remove.",
+                ephemeral=True
+            )
+            return
+
+        # Show product selection dropdown
+        view = RemoveInventorySelectView(items)
+        await interaction.followup.send(
+            "Select the product you want to remove:",
+            view=view,
+            ephemeral=True
+        )
+
+    except Exception as e:
+        await interaction.followup.send(
+            f"Error loading products: {str(e)}",
+            ephemeral=True
+        )
+
+# ===== /EDIT-SALE COMMAND =====
+
+@bot.tree.command(name="edit-sale", description="Edit a sale entry")
+@is_dm_only()
+async def edit_sale(interaction: discord.Interaction):
+    """Edit sale entry command"""
+    await interaction.response.defer(ephemeral=True)
+
+    try:
+        # Check if user is registered
+        user = await db.get_user(str(interaction.user.id))
+        if not user:
+            await interaction.followup.send(
+                "You haven't set up your Google Sheets yet! Use `/setup` first.",
+                ephemeral=True
+            )
+            return
+
+        # Read sales from Google Sheets
+        sales = sheets_manager.read_sales(
+            user['spreadsheet_id'],
+            config.SALES_SHEET_NAME,
+            start_row=8
+        )
+
+        if not sales:
+            await interaction.followup.send(
+                "You have no sales records! Use `/sales` to add sales first.",
+                ephemeral=True
+            )
+            return
+
+        # Show sale selection dropdown
+        view = SaleSelectView(sales)
+        await interaction.followup.send(
+            "Select the sale you want to edit:",
+            view=view,
+            ephemeral=True
+        )
+
+    except Exception as e:
+        await interaction.followup.send(
+            f"Error loading sales: {str(e)}",
+            ephemeral=True
+        )
+
+# ===== /REMOVE-SALE COMMAND =====
+
+@bot.tree.command(name="remove-sale", description="Remove a sale entry")
+@is_dm_only()
+async def remove_sale(interaction: discord.Interaction):
+    """Remove sale entry command"""
+    await interaction.response.defer(ephemeral=True)
+
+    try:
+        # Check if user is registered
+        user = await db.get_user(str(interaction.user.id))
+        if not user:
+            await interaction.followup.send(
+                "You haven't set up your Google Sheets yet! Use `/setup` first.",
+                ephemeral=True
+            )
+            return
+
+        # Read sales from Google Sheets
+        sales = sheets_manager.read_sales(
+            user['spreadsheet_id'],
+            config.SALES_SHEET_NAME,
+            start_row=8
+        )
+
+        if not sales:
+            await interaction.followup.send(
+                "You have no sales records! Nothing to remove.",
+                ephemeral=True
+            )
+            return
+
+        # Show sale selection dropdown
+        view = RemoveSaleSelectView(sales)
+        await interaction.followup.send(
+            "Select the sale you want to remove:",
+            view=view,
+            ephemeral=True
+        )
+
+    except Exception as e:
+        await interaction.followup.send(
+            f"Error loading sales: {str(e)}",
             ephemeral=True
         )
 

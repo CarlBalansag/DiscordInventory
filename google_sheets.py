@@ -172,6 +172,59 @@ class GoogleSheetsManager:
         except Exception:
             raise ValueError("Could not extract spreadsheet ID from URL")
 
+    def delete_row(self, spreadsheet_id: str, sheet_name: str, row_number: int) -> bool:
+        """
+        Delete a row from the sheet
+
+        Args:
+            spreadsheet_id: The Google Spreadsheet ID
+            sheet_name: The sheet tab name
+            row_number: The row number to delete
+
+        Returns:
+            True if successful
+        """
+        try:
+            # Get the sheet ID (not the same as spreadsheet ID)
+            spreadsheet = self.service.spreadsheets().get(
+                spreadsheetId=spreadsheet_id
+            ).execute()
+
+            sheet_id = None
+            for sheet in spreadsheet.get('sheets', []):
+                if sheet['properties']['title'] == sheet_name:
+                    sheet_id = sheet['properties']['sheetId']
+                    break
+
+            if sheet_id is None:
+                raise Exception(f"Sheet '{sheet_name}' not found")
+
+            # Delete the row using batch update
+            request = {
+                'requests': [
+                    {
+                        'deleteDimension': {
+                            'range': {
+                                'sheetId': sheet_id,
+                                'dimension': 'ROWS',
+                                'startIndex': row_number - 1,  # 0-indexed
+                                'endIndex': row_number  # Exclusive
+                            }
+                        }
+                    }
+                ]
+            }
+
+            self.service.spreadsheets().batchUpdate(
+                spreadsheetId=spreadsheet_id,
+                body=request
+            ).execute()
+
+            return True
+
+        except Exception as e:
+            raise Exception(f"Failed to delete row: {e}")
+
     def read_inventory(self, spreadsheet_id: str, sheet_name: str, start_row: int = 8):
         """
         Read inventory data from the sheet
@@ -282,3 +335,86 @@ class GoogleSheetsManager:
         except Exception as e:
             print(f"DEBUG: Exception occurred: {str(e)}")
             raise Exception(f"Failed to read inventory: {e}")
+
+    def read_sales(self, spreadsheet_id: str, sheet_name: str, start_row: int = 8):
+        """
+        Read sales data from the sheet
+
+        Args:
+            spreadsheet_id: The Google Spreadsheet ID
+            sheet_name: The sheet tab name (usually 'Sales')
+            start_row: The starting row number (default 8)
+
+        Returns:
+            List of sales entries with product name, sold date, quantity, price, shipping
+        """
+        try:
+            # Get the last row by checking column B (where product names are)
+            result = self.service.spreadsheets().values().get(
+                spreadsheetId=spreadsheet_id,
+                range=f"{sheet_name}!B:B"
+            ).execute()
+
+            values = result.get('values', [])
+            last_row = len(values)
+
+            if last_row < start_row:
+                return []
+
+            # Read from start_row to last_row - 1 (exclude Total row)
+            # Columns: B (product), C (sold date), D (qty sold), F (price per unit), H (shipping cost)
+            range_to_read = f"{sheet_name}!B{start_row}:H{last_row - 1}"
+
+            result = self.service.spreadsheets().values().get(
+                spreadsheetId=spreadsheet_id,
+                range=range_to_read
+            ).execute()
+
+            values = result.get('values', [])
+            sales_items = []
+
+            for row_index, row in enumerate(values):
+                # Pad row with empty strings if needed
+                while len(row) < 7:  # B to H = 7 columns
+                    row.append('')
+
+                # Column indices (0-based within our read range B:H)
+                product_name = row[0]  # B
+                sold_date = row[1]  # C
+                qty_sold = row[2]  # D
+                price_per_unit = row[4]  # F (position 4 in B:H range)
+                shipping_cost = row[6]  # H (position 6 in B:H range)
+
+                # Skip empty rows (no product name)
+                if not product_name or str(product_name).strip() == '':
+                    continue
+
+                # Clean up values
+                try:
+                    price_clean = float(str(price_per_unit).replace('$', '').replace(',', '')) if price_per_unit else 0.0
+                except ValueError:
+                    price_clean = 0.0
+
+                try:
+                    shipping_clean = float(str(shipping_cost).replace('$', '').replace(',', '')) if shipping_cost else 0.0
+                except ValueError:
+                    shipping_clean = 0.0
+
+                try:
+                    qty_clean = int(str(qty_sold).replace(',', '')) if qty_sold else 0
+                except ValueError:
+                    qty_clean = 0
+
+                sales_items.append({
+                    'product_name': str(product_name).strip(),
+                    'sold_date': str(sold_date).strip() if sold_date else '',
+                    'quantity_sold': qty_clean,
+                    'price_per_unit': price_clean,
+                    'shipping_cost': shipping_clean,
+                    'row_number': start_row + row_index
+                })
+
+            return sales_items
+
+        except Exception as e:
+            raise Exception(f"Failed to read sales: {e}")
