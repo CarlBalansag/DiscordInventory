@@ -134,12 +134,17 @@ class AskModal(discord.ui.Modal, title='Ask AI About Your Data'):
 
     async def on_submit(self, interaction: discord.Interaction):
         """Handle question submission"""
-        await interaction.response.defer(ephemeral=True)
+        # Send initial "thinking" response immediately
+        await interaction.response.send_message(
+            "🤔 Analyzing your data and thinking...",
+            ephemeral=True
+        )
 
         try:
             # Import here to avoid circular imports
             from database import Database
             from google_sheets import GoogleSheetsManager
+            import config
 
             db = Database()
             sheets_manager = GoogleSheetsManager()
@@ -147,16 +152,10 @@ class AskModal(discord.ui.Modal, title='Ask AI About Your Data'):
             # Get user from database
             user = await db.get_user(str(interaction.user.id))
             if not user:
-                await interaction.followup.send(
-                    "You haven't set up your Google Sheets yet! Use `/setup` first.",
-                    ephemeral=True
+                await interaction.edit_original_response(
+                    content="You haven't set up your Google Sheets yet! Use `/setup` first."
                 )
                 return
-
-            # Update deferred response with "thinking" message
-            await interaction.edit_original_response(
-                content="🤔 Analyzing your data and thinking..."
-            )
 
             # Read inventory data
             inventory_items = sheets_manager.read_inventory(
@@ -203,6 +202,13 @@ class AskModal(discord.ui.Modal, title='Ask AI About Your Data'):
                 )
 
         except Exception as e:
-            await interaction.edit_original_response(
-                content=f"Error: {str(e)}\n\nMake sure:\n1. You have GEMINI_API_KEY in your .env file\n2. You have both Inventory and Sales sheets set up\n3. The sheets are accessible to the bot"
-            )
+            try:
+                await interaction.edit_original_response(
+                    content=f"Error: {str(e)}\n\nMake sure:\n1. You have GEMINI_API_KEY in your .env file\n2. You have both Inventory and Sales sheets set up\n3. The sheets are accessible to the bot"
+                )
+            except:
+                # If editing fails, try sending as followup
+                await interaction.followup.send(
+                    content=f"Error: {str(e)}\n\nMake sure:\n1. You have GEMINI_API_KEY in your .env file\n2. You have both Inventory and Sales sheets set up\n3. The sheets are accessible to the bot",
+                    ephemeral=True
+                )
