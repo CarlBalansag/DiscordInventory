@@ -255,8 +255,8 @@ class GoogleSheetsManager:
                 return []
 
             # Read from start_row to last_row - 1 (exclude Total row)
-            # Columns: B (product), C (date), D (qty purchased), E (qty available), K (cost), L (tax), R (sold checkbox)
-            range_to_read = f"{sheet_name}!B{start_row}:R{last_row - 1}"
+            # Columns: B (product), C (date), D (qty purchased), E (qty available), L (cost), M (tax), T (sold checkbox)
+            range_to_read = f"{sheet_name}!B{start_row}:T{last_row - 1}"
             print(f"DEBUG: Reading range: {range_to_read}")
 
             result = self.service.spreadsheets().values().get(
@@ -274,17 +274,17 @@ class GoogleSheetsManager:
 
             for row_index, row in enumerate(values):
                 # Pad row with empty strings if needed
-                while len(row) < 17:  # B to R = 17 columns
+                while len(row) < 19:  # B to T = 19 columns
                     row.append('')
 
-                # Column indices (0-based within our read range B:R)
+                # Column indices (0-based within our read range B:T)
                 product_name = row[0]  # B
                 date_purchased = row[1]  # C
                 qty_purchased = row[2]  # D
                 qty_available = row[3]  # E
-                cost_per_unit = row[9]  # K (position 9 in B:R range)
-                tax_total = row[10]  # L (position 10 in B:R range)
-                sold_checkbox = row[16]  # R (position 16 in B:R range)
+                cost_per_unit = row[10]  # L (position 10 in B:T range)
+                tax_total = row[11]  # M (position 11 in B:T range)
+                sold_checkbox = row[18]  # T (position 18 in B:T range)
 
                 print(f"DEBUG: Row {start_row + row_index}: Product='{product_name}', Date='{date_purchased}', Qty Avail='{qty_available}', Sold='{sold_checkbox}'")
 
@@ -293,7 +293,7 @@ class GoogleSheetsManager:
                     print(f"DEBUG: Skipping row {start_row + row_index} - empty product name")
                     continue
 
-                # Skip sold items (checkbox in column R is TRUE)
+                # Skip sold items (checkbox in column T is TRUE)
                 if sold_checkbox and str(sold_checkbox).upper() in ['TRUE', 'YES', '1']:
                     print(f"DEBUG: Skipping row {start_row + row_index} - item is fully sold (checkbox TRUE)")
                     continue

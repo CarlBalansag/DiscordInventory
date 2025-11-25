@@ -237,10 +237,10 @@ The bot writes to these columns in your Google Sheet:
 | C | Date Purchased |
 | D | Quantity Purchased |
 | H | Store Purchased |
-| I | Links (optional) |
-| K | Cost Per Unit |
-| L | Tax |
-| N | Retail Price (optional) |
+| J | Links (optional) |
+| L | Cost Per Unit |
+| M | Tax |
+| O | Retail Price (optional) |
 
 If your sheet uses different columns, modify the `COLUMN_MAPPING` in [config.py](config.py).
 
