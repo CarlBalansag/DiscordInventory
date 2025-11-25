@@ -13,14 +13,11 @@ from database import Database
 from google_sheets import GoogleSheetsManager
 from commands.add import AddProductStep1Modal
 from commands.sales import ProductSelectView
-<<<<<<< HEAD
 from commands.ask import AskModal
-=======
 from commands.edit import InventorySelectView
 from commands.remove import RemoveInventorySelectView
 from commands.edit_sales import SaleSelectView
 from commands.remove_sales import RemoveSaleSelectView
->>>>>>> e447b2f1551b6d82c207f1bf501412d7da067325
 
 # Initialize bot with intents
 intents = discord.Intents.default()
@@ -327,7 +324,6 @@ async def inventory(interaction: discord.Interaction):
             ephemeral=True
         )
 
-<<<<<<< HEAD
 # ===== /ASK COMMAND =====
 
 @bot.tree.command(name="ask", description="Ask AI questions about your inventory and sales data")
@@ -346,7 +342,7 @@ async def ask(interaction: discord.Interaction):
     # Show question modal
     modal = AskModal()
     await interaction.response.send_modal(modal)
-=======
+
 # ===== /EDIT COMMAND =====
 
 @bot.tree.command(name="edit", description="Edit an inventory item")
@@ -530,7 +526,6 @@ async def remove_sale(interaction: discord.Interaction):
             f"Error loading sales: {str(e)}",
             ephemeral=True
         )
->>>>>>> e447b2f1551b6d82c207f1bf501412d7da067325
 
 # ===== /CLEAR COMMAND =====
 
