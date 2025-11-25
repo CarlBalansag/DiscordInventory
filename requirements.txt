@@ -8,7 +8,7 @@ google-auth-httplib2>=0.1.1
 google-api-python-client>=2.100.0
 
 # Google Gemini AI
-google-generativeai>=0.3.0
+google-generativeai>=0.8.5
 
 # Environment Variables
 python-dotenv>=1.0.0

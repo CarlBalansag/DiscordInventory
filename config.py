@@ -16,6 +16,7 @@ SERVICE_ACCOUNT_FILE = os.getenv('SERVICE_ACCOUNT_FILE', 'service_account.json')
 
 # Gemini AI Configuration
 GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')
+GEMINI_MODEL = os.getenv('GEMINI_MODEL', 'gemini-pro-latest')
 
 # Database Configuration
 DATABASE_URL = os.getenv('DATABASE_URL')

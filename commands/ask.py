@@ -77,7 +77,15 @@ class AskCommand:
         try:
             # Configure Gemini
             genai.configure(api_key=config.GEMINI_API_KEY)
-            model = genai.GenerativeModel('gemini-pro')
+            model_candidates = []
+            if config.GEMINI_MODEL:
+                model_candidates.append(config.GEMINI_MODEL)
+            model_candidates.extend([
+                'gemini-pro-latest',
+                'gemini-flash-latest'
+            ])
+            tried_models = []
+            last_error = None
 
             # Create the prompt
             current_date = datetime.now().strftime("%m/%d/%Y")
@@ -111,11 +119,32 @@ Please provide a clear, concise answer with specific numbers. Show your calculat
 
             # Generate response in a thread pool to avoid blocking
             loop = asyncio.get_event_loop()
-            response = await loop.run_in_executor(
-                None,
-                lambda: model.generate_content(prompt)
+
+            for model_name in model_candidates:
+                if model_name in tried_models:
+                    continue
+                tried_models.append(model_name)
+
+                try:
+                    model = genai.GenerativeModel(model_name)
+                    response = await loop.run_in_executor(
+                        None,
+                        lambda: model.generate_content(prompt)
+                    )
+                    return response.text
+                except Exception as model_error:
+                    error_text = str(model_error)
+                    last_error = error_text
+                    # If the model is missing/unsupported, try the next one
+                    if "404" in error_text or "not found" in error_text.lower():
+                        continue
+                    # For other issues, surface immediately
+                    raise Exception(f"Gemini API error: {error_text}")
+
+            raise Exception(
+                "Gemini API error: No supported Gemini models were available "
+                f"(tried: {', '.join(tried_models)}). Last error: {last_error}"
             )
-            return response.text
 
         except Exception as e:
             raise Exception(f"Gemini API error: {str(e)}")
@@ -136,7 +165,7 @@ class AskModal(discord.ui.Modal, title='Ask AI About Your Data'):
         """Handle question submission"""
         # Send initial "thinking" response immediately
         await interaction.response.send_message(
-            "🤔 Analyzing your data and thinking...",
+            "Analyzing your data and thinking...",
             ephemeral=True
         )
 
