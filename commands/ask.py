@@ -153,10 +153,9 @@ class AskModal(discord.ui.Modal, title='Ask AI About Your Data'):
                 )
                 return
 
-            # Send "thinking" message
-            await interaction.followup.send(
-                "🤔 Analyzing your data and thinking...",
-                ephemeral=True
+            # Update deferred response with "thinking" message
+            await interaction.edit_original_response(
+                content="🤔 Analyzing your data and thinking..."
             )
 
             # Read inventory data
