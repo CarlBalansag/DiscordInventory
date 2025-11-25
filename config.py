@@ -26,10 +26,10 @@ COLUMN_MAPPING = {
     'date_purchased': 'C',
     'quantity': 'D',
     'store': 'H',
-    'links': 'I',
-    'cost_per_unit': 'K',
-    'tax': 'L',
-    'retail_price': 'N'
+    'links': 'J',
+    'cost_per_unit': 'L',
+    'tax': 'M',
+    'retail_price': 'O'
 }
 
 # Sales Sheet Configuration

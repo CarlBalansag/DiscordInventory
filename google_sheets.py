@@ -172,6 +172,59 @@ class GoogleSheetsManager:
         except Exception:
             raise ValueError("Could not extract spreadsheet ID from URL")
 
+    def delete_row(self, spreadsheet_id: str, sheet_name: str, row_number: int) -> bool:
+        """
+        Delete a row from the sheet
+
+        Args:
+            spreadsheet_id: The Google Spreadsheet ID
+            sheet_name: The sheet tab name
+            row_number: The row number to delete
+
+        Returns:
+            True if successful
+        """
+        try:
+            # Get the sheet ID (not the same as spreadsheet ID)
+            spreadsheet = self.service.spreadsheets().get(
+                spreadsheetId=spreadsheet_id
+            ).execute()
+
+            sheet_id = None
+            for sheet in spreadsheet.get('sheets', []):
+                if sheet['properties']['title'] == sheet_name:
+                    sheet_id = sheet['properties']['sheetId']
+                    break
+
+            if sheet_id is None:
+                raise Exception(f"Sheet '{sheet_name}' not found")
+
+            # Delete the row using batch update
+            request = {
+                'requests': [
+                    {
+                        'deleteDimension': {
+                            'range': {
+                                'sheetId': sheet_id,
+                                'dimension': 'ROWS',
+                                'startIndex': row_number - 1,  # 0-indexed
+                                'endIndex': row_number  # Exclusive
+                            }
+                        }
+                    }
+                ]
+            }
+
+            self.service.spreadsheets().batchUpdate(
+                spreadsheetId=spreadsheet_id,
+                body=request
+            ).execute()
+
+            return True
+
+        except Exception as e:
+            raise Exception(f"Failed to delete row: {e}")
+
     def read_inventory(self, spreadsheet_id: str, sheet_name: str, start_row: int = 8):
         """
         Read inventory data from the sheet
@@ -202,7 +255,11 @@ class GoogleSheetsManager:
                 return []
 
             # Read from start_row to last_row - 1 (exclude Total row)
+<<<<<<< HEAD
             # Columns: B-T (all relevant inventory data)
+=======
+            # Columns: B (product), C (date), D (qty purchased), E (qty available), L (cost), M (tax), T (sold checkbox)
+>>>>>>> e447b2f1551b6d82c207f1bf501412d7da067325
             range_to_read = f"{sheet_name}!B{start_row}:T{last_row - 1}"
             print(f"DEBUG: Reading range: {range_to_read}")
 
@@ -229,6 +286,7 @@ class GoogleSheetsManager:
                 date_purchased = row[1]  # C
                 qty_purchased = row[2]  # D
                 qty_available = row[3]  # E
+<<<<<<< HEAD
                 days_owned = row[4]  # F
                 store_purchased = row[6]  # H
                 card_used = row[7]  # I
@@ -241,6 +299,11 @@ class GoogleSheetsManager:
                 cashback_total = row[15]  # Q
                 checkbox_listed = row[17]  # S
                 sold_checkbox = row[18]  # T
+=======
+                cost_per_unit = row[10]  # L (position 10 in B:T range)
+                tax_total = row[11]  # M (position 11 in B:T range)
+                sold_checkbox = row[18]  # T (position 18 in B:T range)
+>>>>>>> e447b2f1551b6d82c207f1bf501412d7da067325
 
                 print(f"DEBUG: Row {start_row + row_index}: Product='{product_name}', Date='{date_purchased}', Qty Avail='{qty_available}', Sold='{sold_checkbox}'")
 
@@ -249,6 +312,7 @@ class GoogleSheetsManager:
                     print(f"DEBUG: Skipping row {start_row + row_index} - empty product name")
                     continue
 
+<<<<<<< HEAD
                 # Note: We now include sold items so AI can analyze full history
                 # Users can still ask "what inventory do I have" to see unsold items
 
@@ -265,6 +329,12 @@ class GoogleSheetsManager:
                         return int(str(val).replace(',', '')) if val else 0
                     except ValueError:
                         return 0
+=======
+                # Skip sold items (checkbox in column T is TRUE)
+                if sold_checkbox and str(sold_checkbox).upper() in ['TRUE', 'YES', '1']:
+                    print(f"DEBUG: Skipping row {start_row + row_index} - item is fully sold (checkbox TRUE)")
+                    continue
+>>>>>>> e447b2f1551b6d82c207f1bf501412d7da067325
 
                 # Calculate tax per unit
                 tax_per_unit = 0.0
@@ -310,7 +380,11 @@ class GoogleSheetsManager:
             start_row: The starting row number (default 8)
 
         Returns:
+<<<<<<< HEAD
             List of sales items with product name, date sold, qty sold, price, shipping cost
+=======
+            List of sales entries with product name, sold date, quantity, price, shipping
+>>>>>>> e447b2f1551b6d82c207f1bf501412d7da067325
         """
         try:
             # Get the last row by checking column B (where product names are)
@@ -322,6 +396,7 @@ class GoogleSheetsManager:
             values = result.get('values', [])
             last_row = len(values)
 
+<<<<<<< HEAD
             print(f"DEBUG: Sales sheet '{sheet_name}' has {last_row} total rows")
             print(f"DEBUG: Reading from row {start_row} to row {last_row - 1}")
 
@@ -333,6 +408,14 @@ class GoogleSheetsManager:
             # Columns: B-J (all sales data including net profit and ROI)
             range_to_read = f"{sheet_name}!B{start_row}:J{last_row - 1}"
             print(f"DEBUG: Reading sales range: {range_to_read}")
+=======
+            if last_row < start_row:
+                return []
+
+            # Read from start_row to last_row - 1 (exclude Total row)
+            # Columns: B (product), C (sold date), D (qty sold), F (price per unit), H (shipping cost)
+            range_to_read = f"{sheet_name}!B{start_row}:H{last_row - 1}"
+>>>>>>> e447b2f1551b6d82c207f1bf501412d7da067325
 
             result = self.service.spreadsheets().values().get(
                 spreadsheetId=spreadsheet_id,
@@ -340,15 +423,19 @@ class GoogleSheetsManager:
             ).execute()
 
             values = result.get('values', [])
+<<<<<<< HEAD
             print(f"DEBUG: Got {len(values)} rows of sales data")
 
             if values:
                 print(f"DEBUG: First sales row data: {values[0]}")
 
+=======
+>>>>>>> e447b2f1551b6d82c207f1bf501412d7da067325
             sales_items = []
 
             for row_index, row in enumerate(values):
                 # Pad row with empty strings if needed
+<<<<<<< HEAD
                 while len(row) < 9:  # B to J = 9 columns
                     row.append('')
 
@@ -382,10 +469,42 @@ class GoogleSheetsManager:
                         return int(str(val).replace(',', '')) if val else 0
                     except ValueError:
                         return 0
+=======
+                while len(row) < 7:  # B to H = 7 columns
+                    row.append('')
+
+                # Column indices (0-based within our read range B:H)
+                product_name = row[0]  # B
+                sold_date = row[1]  # C
+                qty_sold = row[2]  # D
+                price_per_unit = row[4]  # F (position 4 in B:H range)
+                shipping_cost = row[6]  # H (position 6 in B:H range)
+
+                # Skip empty rows (no product name)
+                if not product_name or str(product_name).strip() == '':
+                    continue
+
+                # Clean up values
+                try:
+                    price_clean = float(str(price_per_unit).replace('$', '').replace(',', '')) if price_per_unit else 0.0
+                except ValueError:
+                    price_clean = 0.0
+
+                try:
+                    shipping_clean = float(str(shipping_cost).replace('$', '').replace(',', '')) if shipping_cost else 0.0
+                except ValueError:
+                    shipping_clean = 0.0
+
+                try:
+                    qty_clean = int(str(qty_sold).replace(',', '')) if qty_sold else 0
+                except ValueError:
+                    qty_clean = 0
+>>>>>>> e447b2f1551b6d82c207f1bf501412d7da067325
 
                 sales_items.append({
                     'product_name': str(product_name).strip(),
                     'sold_date': str(sold_date).strip() if sold_date else '',
+<<<<<<< HEAD
                     'quantity_sold': clean_int(quantity_sold),
                     'price_per_unit': clean_currency(price_per_unit),
                     'total_revenue': clean_currency(total_revenue),
@@ -400,4 +519,15 @@ class GoogleSheetsManager:
 
         except Exception as e:
             print(f"DEBUG: Exception occurred reading sales: {str(e)}")
+=======
+                    'quantity_sold': qty_clean,
+                    'price_per_unit': price_clean,
+                    'shipping_cost': shipping_clean,
+                    'row_number': start_row + row_index
+                })
+
+            return sales_items
+
+        except Exception as e:
+>>>>>>> e447b2f1551b6d82c207f1bf501412d7da067325
             raise Exception(f"Failed to read sales: {e}")
