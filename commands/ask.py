@@ -72,6 +72,8 @@ class AskCommand:
         Returns:
             AI-generated answer
         """
+        import asyncio
+
         try:
             # Configure Gemini
             genai.configure(api_key=config.GEMINI_API_KEY)
@@ -107,8 +109,12 @@ User's Question: {user_question}
 Please provide a clear, concise answer with specific numbers. Show your calculations when relevant. If you need to make assumptions, state them clearly.
 """
 
-            # Generate response
-            response = model.generate_content(prompt)
+            # Generate response in a thread pool to avoid blocking
+            loop = asyncio.get_event_loop()
+            response = await loop.run_in_executor(
+                None,
+                lambda: model.generate_content(prompt)
+            )
             return response.text
 
         except Exception as e:
