@@ -202,8 +202,8 @@ class GoogleSheetsManager:
                 return []
 
             # Read from start_row to last_row - 1 (exclude Total row)
-            # Columns: B (product), C (date), D (qty purchased), E (qty available), K (cost), L (tax), R (sold checkbox)
-            range_to_read = f"{sheet_name}!B{start_row}:R{last_row - 1}"
+            # Columns: B-T (all relevant inventory data)
+            range_to_read = f"{sheet_name}!B{start_row}:T{last_row - 1}"
             print(f"DEBUG: Reading range: {range_to_read}")
 
             result = self.service.spreadsheets().values().get(
@@ -221,17 +221,26 @@ class GoogleSheetsManager:
 
             for row_index, row in enumerate(values):
                 # Pad row with empty strings if needed
-                while len(row) < 17:  # B to R = 17 columns
+                while len(row) < 19:  # B to T = 19 columns
                     row.append('')
 
-                # Column indices (0-based within our read range B:R)
+                # Column indices (0-based within our read range B:T)
                 product_name = row[0]  # B
                 date_purchased = row[1]  # C
                 qty_purchased = row[2]  # D
                 qty_available = row[3]  # E
-                cost_per_unit = row[9]  # K (position 9 in B:R range)
-                tax_total = row[10]  # L (position 10 in B:R range)
-                sold_checkbox = row[16]  # R (position 16 in B:R range)
+                days_owned = row[4]  # F
+                store_purchased = row[6]  # H
+                card_used = row[7]  # I
+                link = row[8]  # J
+                cost_per_unit = row[10]  # L
+                tax_total = row[11]  # M
+                total_cost = row[12]  # N
+                retail_cost = row[13]  # O
+                retail_total_cost = row[14]  # P
+                cashback_total = row[15]  # Q
+                checkbox_listed = row[17]  # S
+                sold_checkbox = row[18]  # T
 
                 print(f"DEBUG: Row {start_row + row_index}: Product='{product_name}', Date='{date_purchased}', Qty Avail='{qty_available}', Sold='{sold_checkbox}'")
 
@@ -240,39 +249,47 @@ class GoogleSheetsManager:
                     print(f"DEBUG: Skipping row {start_row + row_index} - empty product name")
                     continue
 
-                # Skip sold items (checkbox in column R is TRUE)
-                if sold_checkbox and str(sold_checkbox).upper() in ['TRUE', 'YES', '1']:
-                    print(f"DEBUG: Skipping row {start_row + row_index} - item is fully sold (checkbox TRUE)")
-                    continue
+                # Note: We now include sold items so AI can analyze full history
+                # Users can still ask "what inventory do I have" to see unsold items
+
+                # Helper function to clean currency
+                def clean_currency(val):
+                    try:
+                        return float(str(val).replace('$', '').replace(',', '')) if val else 0.0
+                    except ValueError:
+                        return 0.0
+
+                # Helper function to clean integer
+                def clean_int(val):
+                    try:
+                        return int(str(val).replace(',', '')) if val else 0
+                    except ValueError:
+                        return 0
 
                 # Calculate tax per unit
                 tax_per_unit = 0.0
-                try:
-                    if tax_total and qty_purchased:
-                        tax_float = float(str(tax_total).replace('$', '').replace(',', ''))
-                        qty_float = float(str(qty_purchased).replace(',', ''))
-                        if qty_float > 0:
-                            tax_per_unit = tax_float / qty_float
-                except (ValueError, ZeroDivisionError):
-                    tax_per_unit = 0.0
-
-                # Clean up values
-                try:
-                    cost_clean = float(str(cost_per_unit).replace('$', '').replace(',', '')) if cost_per_unit else 0.0
-                except ValueError:
-                    cost_clean = 0.0
-
-                try:
-                    qty_avail_clean = int(str(qty_available).replace(',', '')) if qty_available else 0
-                except ValueError:
-                    qty_avail_clean = 0
+                tax_total_clean = clean_currency(tax_total)
+                qty_purchased_clean = clean_int(qty_purchased)
+                if tax_total_clean and qty_purchased_clean > 0:
+                    tax_per_unit = tax_total_clean / qty_purchased_clean
 
                 inventory_items.append({
                     'product_name': str(product_name).strip(),
                     'date_purchased': str(date_purchased).strip() if date_purchased else '',
-                    'qty_available': qty_avail_clean,
-                    'cost_per_unit': cost_clean,
+                    'qty_purchased': qty_purchased_clean,
+                    'qty_available': clean_int(qty_available),
+                    'days_owned': str(days_owned).strip() if days_owned else '',
+                    'store_purchased': str(store_purchased).strip() if store_purchased else '',
+                    'card_used': str(card_used).strip() if card_used else '',
+                    'cost_per_unit': clean_currency(cost_per_unit),
+                    'tax_total': tax_total_clean,
                     'tax_per_unit': tax_per_unit,
+                    'total_cost': clean_currency(total_cost),
+                    'retail_cost': clean_currency(retail_cost),
+                    'retail_total_cost': clean_currency(retail_total_cost),
+                    'cashback_total': clean_currency(cashback_total),
+                    'is_listed': str(checkbox_listed).upper() in ['TRUE', 'YES', '1'] if checkbox_listed else False,
+                    'is_sold': str(sold_checkbox).upper() in ['TRUE', 'YES', '1'] if sold_checkbox else False,
                     'row_number': start_row + row_index
                 })
 
@@ -282,3 +299,105 @@ class GoogleSheetsManager:
         except Exception as e:
             print(f"DEBUG: Exception occurred: {str(e)}")
             raise Exception(f"Failed to read inventory: {e}")
+
+    def read_sales(self, spreadsheet_id: str, sheet_name: str, start_row: int = 8):
+        """
+        Read sales data from the sheet
+
+        Args:
+            spreadsheet_id: The Google Spreadsheet ID
+            sheet_name: The sheet tab name (usually 'Sales')
+            start_row: The starting row number (default 8)
+
+        Returns:
+            List of sales items with product name, date sold, qty sold, price, shipping cost
+        """
+        try:
+            # Get the last row by checking column B (where product names are)
+            result = self.service.spreadsheets().values().get(
+                spreadsheetId=spreadsheet_id,
+                range=f"{sheet_name}!B:B"
+            ).execute()
+
+            values = result.get('values', [])
+            last_row = len(values)
+
+            print(f"DEBUG: Sales sheet '{sheet_name}' has {last_row} total rows")
+            print(f"DEBUG: Reading from row {start_row} to row {last_row - 1}")
+
+            if last_row < start_row:
+                print(f"DEBUG: Not enough rows. Last row ({last_row}) < start row ({start_row})")
+                return []
+
+            # Read from start_row to last_row - 1 (exclude Total row)
+            # Columns: B-J (all sales data including net profit and ROI)
+            range_to_read = f"{sheet_name}!B{start_row}:J{last_row - 1}"
+            print(f"DEBUG: Reading sales range: {range_to_read}")
+
+            result = self.service.spreadsheets().values().get(
+                spreadsheetId=spreadsheet_id,
+                range=range_to_read
+            ).execute()
+
+            values = result.get('values', [])
+            print(f"DEBUG: Got {len(values)} rows of sales data")
+
+            if values:
+                print(f"DEBUG: First sales row data: {values[0]}")
+
+            sales_items = []
+
+            for row_index, row in enumerate(values):
+                # Pad row with empty strings if needed
+                while len(row) < 9:  # B to J = 9 columns
+                    row.append('')
+
+                # Column indices (0-based within our read range B:J)
+                product_name = row[0]  # B - Item name
+                sold_date = row[1]  # C - Sold Date
+                quantity_sold = row[2]  # D - Quantity sold
+                price_per_unit = row[4]  # F - Price per unit
+                total_revenue = row[5]  # G - total
+                shipping_cost = row[6]  # H - shipping and handling cost
+                net_profit = row[7]  # I - net profit
+                roi = row[8]  # J - ROI
+
+                print(f"DEBUG: Sales Row {start_row + row_index}: Product='{product_name}', Date='{sold_date}', Qty='{quantity_sold}'")
+
+                # Skip empty rows (no product name)
+                if not product_name or str(product_name).strip() == '':
+                    print(f"DEBUG: Skipping sales row {start_row + row_index} - empty product name")
+                    continue
+
+                # Helper function to clean currency
+                def clean_currency(val):
+                    try:
+                        return float(str(val).replace('$', '').replace(',', '').replace('%', '')) if val else 0.0
+                    except ValueError:
+                        return 0.0
+
+                # Helper function to clean integer
+                def clean_int(val):
+                    try:
+                        return int(str(val).replace(',', '')) if val else 0
+                    except ValueError:
+                        return 0
+
+                sales_items.append({
+                    'product_name': str(product_name).strip(),
+                    'sold_date': str(sold_date).strip() if sold_date else '',
+                    'quantity_sold': clean_int(quantity_sold),
+                    'price_per_unit': clean_currency(price_per_unit),
+                    'total_revenue': clean_currency(total_revenue),
+                    'shipping_cost': clean_currency(shipping_cost),
+                    'net_profit': clean_currency(net_profit),
+                    'roi': clean_currency(roi),
+                    'row_number': start_row + row_index
+                })
+
+            print(f"DEBUG: Returning {len(sales_items)} sales items")
+            return sales_items
+
+        except Exception as e:
+            print(f"DEBUG: Exception occurred reading sales: {str(e)}")
+            raise Exception(f"Failed to read sales: {e}")
