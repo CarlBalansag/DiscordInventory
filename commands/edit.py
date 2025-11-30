@@ -151,6 +151,19 @@ class EditInventoryModal(discord.ui.Modal, title='Edit Product'):
                 data
             )
 
+            # If product name changed, update HYPERLINK formula
+            if 'product_name' in data:
+                uuid = self.item.get('uuid')
+                if uuid:
+                    dashboard_url = f"{config.DASHBOARD_BASE_URL}/product/{uuid}?s={user['spreadsheet_id']}"
+                    hyperlink_formula = f'=HYPERLINK("{dashboard_url}", "{data["product_name"]}")'
+                    sheets_manager.write_formula(
+                        user['spreadsheet_id'],
+                        user['sheet_name'],
+                        f"B{self.item['row_number']}",
+                        hyperlink_formula
+                    )
+
             # Build update summary
             changes = '\n'.join([f"**{key.replace('_', ' ').title()}:** {value}" for key, value in data.items()])
 

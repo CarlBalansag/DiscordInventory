@@ -563,12 +563,82 @@ async def health(request):
     print(f"[HEALTH CHECK] Pinged at {timestamp}", flush=True)
     return web.Response(text=f"ok - {timestamp}")
 
+async def product_dashboard_handler(request):
+    """Render product dashboard page"""
+    from templates import render_product_dashboard, render_error_page
+    import uuid as uuid_module
+
+    try:
+        product_uuid = request.match_info['uuid']
+
+        # Validate UUID format
+        try:
+            uuid_module.UUID(product_uuid)
+        except ValueError:
+            return web.Response(
+                text=render_error_page("Invalid product ID format."),
+                content_type='text/html',
+                status=400
+            )
+
+        # Get spreadsheet_id from query parameter
+        spreadsheet_id = request.query.get('s')
+
+        if not spreadsheet_id:
+            return web.Response(
+                text=render_error_page("Product not found. Please use the link from your Google Sheet."),
+                content_type='text/html',
+                status=404
+            )
+
+        # Find user by spreadsheet_id
+        user = await db.get_user_by_spreadsheet(spreadsheet_id)
+
+        if not user:
+            return web.Response(
+                text=render_error_page("Product not found."),
+                content_type='text/html',
+                status=404
+            )
+
+        # Read product data from Google Sheets
+        product = sheets_manager.read_product_by_uuid(
+            spreadsheet_id,
+            user['sheet_name'],
+            product_uuid
+        )
+
+        if not product:
+            return web.Response(
+                text=render_error_page("Product not found in inventory."),
+                content_type='text/html',
+                status=404
+            )
+
+        # Render dashboard
+        html = render_product_dashboard(product)
+
+        return web.Response(
+            text=html,
+            content_type='text/html'
+        )
+
+    except Exception as e:
+        print(f"Error rendering dashboard: {e}", flush=True)
+        return web.Response(
+            text=render_error_page(f"An error occurred while loading the product dashboard."),
+            content_type='text/html',
+            status=500
+        )
+
 async def run_http_server():
-    """Run a minimal HTTP server so Render can detect a bound port."""
+    """Run HTTP server with dashboard routes"""
     app = web.Application()
     app.router.add_get("/", health)
+    app.router.add_get("/product/{uuid}", product_dashboard_handler)
     port = int(os.getenv("PORT", 10000))
     print(f"[HTTP SERVER] Starting on port {port}...", flush=True)
+    print(f"[HTTP SERVER] Routes: / (health), /product/{{uuid}} (dashboard)", flush=True)
     runner = web.AppRunner(app)
     await runner.setup()
     site = web.TCPSite(runner, "0.0.0.0", port)

@@ -92,3 +92,23 @@ class Database:
     async def user_exists(self, discord_id: str) -> bool:
         """Check if a user exists in the database"""
         return (await self.get_user(discord_id)) is not None
+
+    async def get_user_by_spreadsheet(self, spreadsheet_id: str) -> Optional[Dict[str, str]]:
+        """Get user information by spreadsheet ID"""
+        from sqlalchemy import select
+        async with self.SessionLocal() as session:
+            result = await session.execute(
+                select(User).where(User.spreadsheet_id == spreadsheet_id)
+            )
+            user = result.scalar_one_or_none()
+
+            if not user:
+                return None
+
+            return {
+                "discord_id": user.discord_id,
+                "spreadsheet_id": user.spreadsheet_id,
+                "sheet_name": user.sheet_name,
+                "created_at": user.created_at,
+                "updated_at": user.updated_at,
+            }

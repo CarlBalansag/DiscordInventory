@@ -109,6 +109,186 @@ class GoogleSheetsManager:
         except Exception as e:
             raise Exception(f"Failed to write data to sheet: {e}")
 
+    def write_formula(self, spreadsheet_id: str, sheet_name: str, cell: str, formula: str) -> bool:
+        """
+        Write a formula to a specific cell
+
+        Args:
+            spreadsheet_id: The Google Spreadsheet ID
+            sheet_name: The sheet tab name
+            cell: Cell reference (e.g., 'B8')
+            formula: Formula to write (e.g., '=HYPERLINK(...)')
+
+        Returns:
+            True if successful
+        """
+        try:
+            body = {
+                'valueInputOption': 'USER_ENTERED',  # Interprets formulas
+                'data': [{
+                    'range': f"{sheet_name}!{cell}",
+                    'values': [[formula]]
+                }]
+            }
+            self.service.spreadsheets().values().batchUpdate(
+                spreadsheetId=spreadsheet_id,
+                body=body
+            ).execute()
+            return True
+        except Exception as e:
+            raise Exception(f"Failed to write formula: {e}")
+
+    def read_cell(self, spreadsheet_id: str, sheet_name: str, cell: str) -> str:
+        """
+        Read a single cell value
+
+        Args:
+            spreadsheet_id: The Google Spreadsheet ID
+            sheet_name: The sheet tab name
+            cell: Cell reference (e.g., 'A8')
+
+        Returns:
+            Cell value as string, or empty string if cell is empty
+        """
+        try:
+            result = self.service.spreadsheets().values().get(
+                spreadsheetId=spreadsheet_id,
+                range=f"{sheet_name}!{cell}"
+            ).execute()
+            values = result.get('values', [])
+            if values and values[0]:
+                return str(values[0][0])
+            return ""
+        except Exception as e:
+            raise Exception(f"Failed to read cell: {e}")
+
+    def set_cell_text_color(self, spreadsheet_id: str, sheet_name: str, cell: str, color: Dict[str, float]) -> bool:
+        """
+        Set text color for a specific cell
+
+        Args:
+            spreadsheet_id: The Google Spreadsheet ID
+            sheet_name: The sheet tab name
+            cell: Cell reference (e.g., 'A8')
+            color: RGB color dict, e.g., {'red': 1.0, 'green': 1.0, 'blue': 1.0} for white
+
+        Returns:
+            True if successful
+        """
+        try:
+            # Get sheet ID
+            spreadsheet = self.service.spreadsheets().get(
+                spreadsheetId=spreadsheet_id
+            ).execute()
+
+            sheet_id = None
+            for sheet in spreadsheet.get('sheets', []):
+                if sheet['properties']['title'] == sheet_name:
+                    sheet_id = sheet['properties']['sheetId']
+                    break
+
+            if sheet_id is None:
+                raise Exception(f"Sheet '{sheet_name}' not found")
+
+            # Parse cell reference (e.g., 'A8' -> column 0, row 7)
+            import re
+            match = re.match(r'([A-Z]+)(\d+)', cell)
+            if not match:
+                raise Exception(f"Invalid cell reference: {cell}")
+
+            col_letter, row_num = match.groups()
+            # Convert column letter to index (A=0, B=1, etc.)
+            col_index = sum((ord(c) - ord('A') + 1) * (26 ** i) for i, c in enumerate(reversed(col_letter))) - 1
+            row_index = int(row_num) - 1
+
+            # Update cell format
+            requests = [{
+                'repeatCell': {
+                    'range': {
+                        'sheetId': sheet_id,
+                        'startRowIndex': row_index,
+                        'endRowIndex': row_index + 1,
+                        'startColumnIndex': col_index,
+                        'endColumnIndex': col_index + 1
+                    },
+                    'cell': {
+                        'userEnteredFormat': {
+                            'textFormat': {
+                                'foregroundColor': color
+                            }
+                        }
+                    },
+                    'fields': 'userEnteredFormat.textFormat.foregroundColor'
+                }
+            }]
+
+            body = {'requests': requests}
+            self.service.spreadsheets().batchUpdate(
+                spreadsheetId=spreadsheet_id,
+                body=body
+            ).execute()
+
+            return True
+        except Exception as e:
+            raise Exception(f"Failed to set cell text color: {e}")
+
+    def read_product_by_uuid(self, spreadsheet_id: str, sheet_name: str, product_uuid: str, start_row: int = 8):
+        """
+        Find product by UUID and return all data
+
+        Args:
+            spreadsheet_id: The Google Spreadsheet ID
+            sheet_name: The sheet tab name
+            product_uuid: UUID to search for
+            start_row: Starting row number (default 8)
+
+        Returns:
+            Product data dict, or None if not found
+        """
+        try:
+            # Read column A to find UUID
+            result = self.service.spreadsheets().values().get(
+                spreadsheetId=spreadsheet_id,
+                range=f"{sheet_name}!A:A"
+            ).execute()
+
+            values = result.get('values', [])
+
+            # Find row with matching UUID
+            for row_index, row in enumerate(values[start_row - 1:], start=start_row):
+                if row and row[0] == product_uuid:
+                    # Found it! Read full row data
+                    row_data_result = self.service.spreadsheets().values().get(
+                        spreadsheetId=spreadsheet_id,
+                        range=f"{sheet_name}!A{row_index}:T{row_index}"
+                    ).execute()
+
+                    data = row_data_result.get('values', [[]])[0]
+
+                    # Pad if needed
+                    while len(data) < 20:
+                        data.append('')
+
+                    # Parse into product dict
+                    return {
+                        'uuid': data[0],  # A
+                        'product_name': data[1],  # B
+                        'date_purchased': data[2],  # C
+                        'qty_purchased': data[3],  # D
+                        'qty_available': data[4],  # E
+                        'store': data[7] if len(data) > 7 else '',  # H
+                        'links': data[9] if len(data) > 9 else '',  # J
+                        'cost_per_unit': float(str(data[11]).replace('$', '').replace(',', '')) if len(data) > 11 and data[11] else 0.0,  # L
+                        'tax': float(str(data[12]).replace('$', '').replace(',', '')) if len(data) > 12 and data[12] else 0.0,  # M
+                        'retail_price': float(str(data[14]).replace('$', '').replace(',', '')) if len(data) > 14 and data[14] else 0.0,  # O
+                        'row_number': row_index
+                    }
+
+            return None  # UUID not found
+
+        except Exception as e:
+            raise Exception(f"Failed to read product by UUID: {e}")
+
     def verify_sheet_access(self, spreadsheet_id: str, sheet_name: str) -> bool:
         """
         Verify that the bot has access to the spreadsheet and sheet exists
@@ -255,8 +435,8 @@ class GoogleSheetsManager:
                 return []
 
             # Read from start_row to last_row - 1 (exclude Total row)
-            # Columns: B (product), C (date), D (qty purchased), E (qty available), L (cost), M (tax), T (sold checkbox)
-            range_to_read = f"{sheet_name}!B{start_row}:T{last_row - 1}"
+            # Columns: A (uuid), B (product), C (date), D (qty purchased), E (qty available), L (cost), M (tax), T (sold checkbox)
+            range_to_read = f"{sheet_name}!A{start_row}:T{last_row - 1}"
             print(f"DEBUG: Reading range: {range_to_read}")
 
             result = self.service.spreadsheets().values().get(
@@ -274,17 +454,18 @@ class GoogleSheetsManager:
 
             for row_index, row in enumerate(values):
                 # Pad row with empty strings if needed
-                while len(row) < 19:  # B to T = 19 columns
+                while len(row) < 20:  # A to T = 20 columns
                     row.append('')
 
-                # Column indices (0-based within our read range B:T)
-                product_name = row[0]  # B
-                date_purchased = row[1]  # C
-                qty_purchased = row[2]  # D
-                qty_available = row[3]  # E
-                cost_per_unit = row[10]  # L (position 10 in B:T range)
-                tax_total = row[11]  # M (position 11 in B:T range)
-                sold_checkbox = row[18]  # T (position 18 in B:T range)
+                # Column indices (0-based within our read range A:T)
+                uuid_val = row[0]  # A
+                product_name = row[1]  # B
+                date_purchased = row[2]  # C
+                qty_purchased = row[3]  # D
+                qty_available = row[4]  # E
+                cost_per_unit = row[11]  # L (position 11 in A:T range)
+                tax_total = row[12]  # M (position 12 in A:T range)
+                sold_checkbox = row[19]  # T (position 19 in A:T range)
 
                 print(f"DEBUG: Row {start_row + row_index}: Product='{product_name}', Date='{date_purchased}', Qty Avail='{qty_available}', Sold='{sold_checkbox}'")
 
@@ -321,6 +502,7 @@ class GoogleSheetsManager:
                     qty_avail_clean = 0
 
                 inventory_items.append({
+                    'uuid': str(uuid_val).strip() if uuid_val else '',
                     'product_name': str(product_name).strip(),
                     'date_purchased': str(date_purchased).strip() if date_purchased else '',
                     'qty_available': qty_avail_clean,

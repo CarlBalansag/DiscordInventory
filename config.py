@@ -17,8 +17,12 @@ SERVICE_ACCOUNT_FILE = os.getenv('SERVICE_ACCOUNT_FILE', 'service_account.json')
 # Database Configuration
 DATABASE_URL = os.getenv('DATABASE_URL')
 
+# Dashboard Configuration
+DASHBOARD_BASE_URL = os.getenv('DASHBOARD_BASE_URL', 'http://localhost:10000')
+
 # Google Sheets Column Mapping (Inventory Sheet)
 COLUMN_MAPPING = {
+    'uuid': 'A',
     'product_name': 'B',
     'date_purchased': 'C',
     'quantity': 'D',

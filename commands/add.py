@@ -4,6 +4,7 @@
 import discord
 from discord import app_commands
 import re
+import uuid
 import config
 
 class AddProductStep1Modal(discord.ui.Modal, title='Add Product - Step 1/3'):
@@ -188,6 +189,9 @@ class AddProductStep2Modal(discord.ui.Modal, title='Add Product - Step 3/3 (Opti
                     )
                     return
 
+            # Generate UUID for this product
+            product_uuid = str(uuid.uuid4())
+
             # Call Apps Script to create new row
             new_row = await sheets_manager.call_apps_script(
                 user['spreadsheet_id'],
@@ -203,6 +207,7 @@ class AddProductStep2Modal(discord.ui.Modal, title='Add Product - Step 3/3 (Opti
 
             # Prepare data to write
             data = {
+                'uuid': product_uuid,
                 'product_name': self.product_name,
                 'date_purchased': self.date_purchased,
                 'quantity': self.quantity,
@@ -221,9 +226,30 @@ class AddProductStep2Modal(discord.ui.Modal, title='Add Product - Step 3/3 (Opti
                 data
             )
 
+            # Set UUID cell text color to white (invisible)
+            sheets_manager.set_cell_text_color(
+                user['spreadsheet_id'],
+                user['sheet_name'],
+                f"A{new_row}",
+                {'red': 1.0, 'green': 1.0, 'blue': 1.0}  # White color
+            )
+
+            # Create dashboard URL
+            dashboard_url = f"{config.DASHBOARD_BASE_URL}/product/{product_uuid}?s={user['spreadsheet_id']}"
+
+            # Update column B with HYPERLINK formula
+            hyperlink_formula = f'=HYPERLINK("{dashboard_url}", "{self.product_name}")'
+            sheets_manager.write_formula(
+                user['spreadsheet_id'],
+                user['sheet_name'],
+                f"B{new_row}",
+                hyperlink_formula
+            )
+
             await interaction.followup.send(
                 f"✅ **Successfully added product to row {new_row}!**\n\n"
                 f"**Product:** {self.product_name}\n"
+                f"**Dashboard:** {dashboard_url}\n"
                 f"**Date:** {self.date_purchased}\n"
                 f"**Quantity:** {self.quantity}\n"
                 f"**Store:** {self.store}\n"
