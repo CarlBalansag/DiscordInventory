@@ -13,6 +13,7 @@ from database import Database
 from google_sheets import GoogleSheetsManager
 from commands.add import AddProductStep1Modal
 from commands.sales import ProductSelectView
+from commands.ask import AskModal
 from commands.edit import InventorySelectView
 from commands.remove import RemoveInventorySelectView
 from commands.edit_sales import SaleSelectView
@@ -322,6 +323,25 @@ async def inventory(interaction: discord.Interaction):
             f"Error reading inventory: {str(e)}",
             ephemeral=True
         )
+
+# ===== /ASK COMMAND =====
+
+@bot.tree.command(name="ask", description="Ask AI questions about your inventory and sales data")
+@is_dm_only()
+async def ask(interaction: discord.Interaction):
+    """Ask AI about spreadsheet data"""
+    # Check if user is registered
+    user = await db.get_user(str(interaction.user.id))
+    if not user:
+        await interaction.response.send_message(
+            "You haven't set up your Google Sheets yet! Use `/setup` first.",
+            ephemeral=True
+        )
+        return
+
+    # Show question modal
+    modal = AskModal()
+    await interaction.response.send_modal(modal)
 
 # ===== /EDIT COMMAND =====
 

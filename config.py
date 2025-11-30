@@ -14,6 +14,10 @@ DISCORD_TOKEN = os.getenv('DISCORD_TOKEN')
 GOOGLE_SCRIPT_URL = os.getenv('GOOGLE_SCRIPT_URL')
 SERVICE_ACCOUNT_FILE = os.getenv('SERVICE_ACCOUNT_FILE', 'service_account.json')
 
+# Gemini AI Configuration
+GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')
+GEMINI_MODEL = os.getenv('GEMINI_MODEL', 'gemini-pro-latest')
+
 # Database Configuration
 DATABASE_URL = os.getenv('DATABASE_URL')
 
@@ -67,6 +71,9 @@ def validate_config():
 
     if not DATABASE_URL:
         errors.append("DATABASE_URL is not set in .env file")
+
+    if not GEMINI_API_KEY:
+        errors.append("GEMINI_API_KEY is not set in .env file")
 
     if not os.path.exists(SERVICE_ACCOUNT_FILE):
         errors.append(f"Service account file not found: {SERVICE_ACCOUNT_FILE}")
