@@ -667,6 +667,100 @@ async def run_http_server():
 
 # ===== RUN BOT =====
 
+async def run_uuid_migration():
+    """Run UUID backfill migration (auto-runs once on startup)"""
+    import uuid as uuid_module
+    from sqlalchemy import select
+    from database import User
+
+    print("=" * 60)
+    print("[MIGRATION] Checking for products without UUIDs...")
+    print("=" * 60)
+
+    try:
+        # Get all users
+        async with db.SessionLocal() as session:
+            result = await session.execute(select(User))
+            users = result.scalars().all()
+
+        if not users:
+            print("[MIGRATION] No users found, skipping migration.")
+            return
+
+        print(f"[MIGRATION] Found {len(users)} user(s) to check")
+        total_updated = 0
+
+        for user_idx, user in enumerate(users, 1):
+            print(f"[MIGRATION] [{user_idx}/{len(users)}] Checking user: {user.discord_id}")
+
+            try:
+                # Read inventory
+                items = sheets_manager.read_inventory(
+                    user.spreadsheet_id,
+                    user.sheet_name,
+                    start_row=8
+                )
+
+                if not items:
+                    print(f"[MIGRATION]   No items found, skipping.")
+                    continue
+
+                updates = 0
+                for item in items:
+                    # Check if UUID exists
+                    if not item.get('uuid') or item['uuid'].strip() == '':
+                        # Generate UUID
+                        new_uuid = str(uuid_module.uuid4())
+                        row = item['row_number']
+
+                        print(f"[MIGRATION]   Row {row}: Adding UUID to '{item['product_name']}'")
+
+                        # Write UUID to column A
+                        sheets_manager.write_data_to_row(
+                            user.spreadsheet_id,
+                            user.sheet_name,
+                            row,
+                            {'uuid': new_uuid}
+                        )
+
+                        # Set UUID cell text color to white (invisible)
+                        sheets_manager.set_cell_text_color(
+                            user.spreadsheet_id,
+                            user.sheet_name,
+                            f"A{row}",
+                            {'red': 1.0, 'green': 1.0, 'blue': 1.0}
+                        )
+
+                        # Update column B with HYPERLINK
+                        dashboard_url = f"{config.DASHBOARD_BASE_URL}/product/{new_uuid}?s={user.spreadsheet_id}"
+                        hyperlink_formula = f'=HYPERLINK("{dashboard_url}", "{item["product_name"]}")'
+                        sheets_manager.write_formula(
+                            user.spreadsheet_id,
+                            user.sheet_name,
+                            f"B{row}",
+                            hyperlink_formula
+                        )
+
+                        updates += 1
+
+                if updates > 0:
+                    print(f"[MIGRATION]   ✅ Updated {updates} product(s)")
+                    total_updated += updates
+                else:
+                    print(f"[MIGRATION]   ✅ All products already have UUIDs")
+
+            except Exception as e:
+                print(f"[MIGRATION]   ❌ Error: {e}")
+                continue
+
+        print("=" * 60)
+        print(f"[MIGRATION] Complete! Total products updated: {total_updated}")
+        print("=" * 60)
+
+    except Exception as e:
+        print(f"[MIGRATION] Error during migration: {e}")
+        print("[MIGRATION] Continuing with bot startup...")
+
 async def main_async():
     """Main entrypoint: validate config, init DB, start bot and HTTP server."""
     # Validate configuration (also checks service account file)
@@ -674,6 +768,9 @@ async def main_async():
 
     # Initialize database schema
     await db.initialize()
+
+    # Run UUID migration (auto-backfill existing products)
+    await run_uuid_migration()
 
     # Run Discord bot and HTTP health server concurrently
     bot_task = asyncio.create_task(bot.start(config.DISCORD_TOKEN))
