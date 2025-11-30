@@ -22,7 +22,7 @@ GEMINI_MODEL = os.getenv('GEMINI_MODEL', 'gemini-pro-latest')
 DATABASE_URL = os.getenv('DATABASE_URL')
 
 # Dashboard Configuration
-DASHBOARD_BASE_URL = os.getenv('DASHBOARD_BASE_URL', 'http://localhost:10000')
+DASHBOARD_BASE_URL = os.getenv('DASHBOARD_BASE_URL', 'http://localhost:10000').rstrip('/')
 
 # Google Sheets Column Mapping (Inventory Sheet)
 COLUMN_MAPPING = {
