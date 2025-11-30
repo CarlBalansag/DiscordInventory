@@ -707,11 +707,12 @@ async def run_uuid_migration():
 
                 updates = 0
                 for item in items:
+                    row = item['row_number']
+
                     # Check if UUID exists
                     if not item.get('uuid') or item['uuid'].strip() == '':
                         # Generate UUID
                         new_uuid = str(uuid_module.uuid4())
-                        row = item['row_number']
 
                         print(f"[MIGRATION]   Row {row}: Adding UUID to '{item['product_name']}'")
 
@@ -731,23 +732,24 @@ async def run_uuid_migration():
                             {'red': 1.0, 'green': 1.0, 'blue': 1.0}
                         )
 
-                        # Update column B with HYPERLINK
-                        dashboard_url = f"{config.DASHBOARD_BASE_URL}/product/{new_uuid}?s={user.spreadsheet_id}"
-                        hyperlink_formula = f'=HYPERLINK("{dashboard_url}", "{item["product_name"]}")'
-                        sheets_manager.write_formula(
-                            user.spreadsheet_id,
-                            user.sheet_name,
-                            f"B{row}",
-                            hyperlink_formula
-                        )
-
                         updates += 1
+                    else:
+                        # UUID exists, reuse it
+                        new_uuid = item['uuid']
+                        print(f"[MIGRATION]   Row {row}: Updating HYPERLINK for '{item['product_name']}'")
 
-                if updates > 0:
-                    print(f"[MIGRATION]   ✅ Updated {updates} product(s)")
-                    total_updated += updates
-                else:
-                    print(f"[MIGRATION]   ✅ All products already have UUIDs")
+                    # Always update HYPERLINK formula (even if UUID already exists)
+                    dashboard_url = f"{config.DASHBOARD_BASE_URL}/product/{new_uuid}?s={user.spreadsheet_id}"
+                    hyperlink_formula = f'=HYPERLINK("{dashboard_url}", "{item["product_name"]}")'
+                    sheets_manager.write_formula(
+                        user.spreadsheet_id,
+                        user.sheet_name,
+                        f"B{row}",
+                        hyperlink_formula
+                    )
+
+                print(f"[MIGRATION]   ✅ Processed {len(items)} product(s) ({updates} new UUIDs)")
+                total_updated += updates
 
             except Exception as e:
                 print(f"[MIGRATION]   ❌ Error: {e}")
